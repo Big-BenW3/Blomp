@@ -1,3 +1,4 @@
+import type { Triage } from "@/lib/ingest/triage";
 import {
   bigint,
   boolean,
@@ -99,6 +100,8 @@ export const runs = pgTable(
     oneLiner: text("one_liner"),
     reason: text("reason"),
     failingStep: text("failing_step"),
+    /** Kane's root-cause analysis; category tells a real app bug apart from a badly written flow. */
+    triage: jsonb("triage").$type<Triage>(),
     credits: doublePrecision("credits"),
     testUrl: text("test_url"),
     evidenceUrl: text("evidence_url"),

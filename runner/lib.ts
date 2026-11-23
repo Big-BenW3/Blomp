@@ -108,6 +108,7 @@ export async function runFlow(
     exitCode,
     end: collector.end,
     failingStep: collector.failingStep,
+    triage: evidence?.triage,
     consoleErrors: evidence?.consoleErrors ?? [],
     networkErrors: evidence?.networkErrors ?? [],
   });

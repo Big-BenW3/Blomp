@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { triageSchema } from "./triage";
 
 const runEnd = z.object({
   status: z.string().max(40),
@@ -30,6 +31,7 @@ export const ingestEvent = z.discriminatedUnion("kind", [
     exitCode: z.number().int(),
     end: runEnd.optional(),
     failingStep: z.string().max(2000).optional(),
+    triage: triageSchema.optional(),
     consoleErrors: z.array(z.string().max(1000)).max(50).default([]),
     networkErrors: z.array(z.string().max(1000)).max(50).default([]),
   }),

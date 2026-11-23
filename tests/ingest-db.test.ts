@@ -80,6 +80,7 @@ describe("applyIngest against real Postgres", () => {
         failingStep: "Expected dashboard, saw error page",
         networkErrors: ["POST /api/auth -> 500"],
         consoleErrors: ["TypeError: x"],
+        triage: { category: "application_issue/ui_data_defect", rootCause: "Login redirects to an error page", severity: "major" },
       }),
     );
     await applyIngest(ev({ kind: "run_end", scanId, flowId: flowC, exitCode: 2 }));
@@ -92,6 +93,7 @@ describe("applyIngest against real Postgres", () => {
       oneLiner: "Login redirect broke",
       failingStep: "Expected dashboard, saw error page",
       networkErrors: ["POST /api/auth -> 500"],
+      triage: { category: "application_issue/ui_data_defect", severity: "major" },
     });
     expect(by(flowC).verdict).toBe("unknown");
   });

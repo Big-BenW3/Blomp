@@ -1,10 +1,24 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import AdmZip from "adm-zip";
+import { parse as parseYaml } from "yaml";
+
+/** Kane's own root-cause analysis of a failed run (from the evidence pack's failure.yaml). */
+export interface Triage {
+  title?: string;
+  /** e.g. application_issue/ui_data_defect (a real bug) or automation_bug/config_issue (the flow itself is wrong) */
+  category?: string;
+  rootCause?: string;
+  severity?: string;
+  suggestedFix?: string;
+  confidence?: number;
+  errorMessage?: string;
+}
 
 export interface Evidence {
   consoleErrors: string[];
   networkErrors: string[];
+  triage?: Triage;
   entryNames: string[];
   packPath?: string;
 }
@@ -59,6 +73,53 @@ function consoleError(rec: unknown): string | undefined {
   return (typeof msg === "string" ? msg : JSON.stringify(o)).slice(0, 500);
 }
 
+function harErrors(text: string): string[] {
+  let har: { log?: { entries?: Array<{ request?: { method?: string; url?: string }; response?: Record<string, unknown> }> } };
+  try {
+    har = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const e of har.log?.entries ?? []) {
+    const status = Number(e.response?.status ?? 0);
+    const failed = status === 0 && Boolean(e.response?._error ?? e.response?._failureText);
+    if (status >= 400 || failed) {
+      out.push(`${e.request?.method ?? "GET"} ${e.request?.url ?? "unknown url"} -> ${failed ? "failed" : status}`.slice(0, 500));
+    }
+  }
+  return out;
+}
+
+function str(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim() ? v.trim().replace(/\s+/g, " ") : undefined;
+}
+
+/** Reads Kane's triage from the first step-level failure.yaml in a pack. */
+function readTriage(zip: AdmZip): Triage | undefined {
+  const entry = zip
+    .getEntries()
+    .filter((e) => !e.isDirectory && /(^|\/)steps\/[^/]+\/failure\.yaml$/.test(e.entryName))
+    .sort((a, b) => a.entryName.localeCompare(b.entryName))[0];
+  if (!entry) return undefined;
+  try {
+    const y = parseYaml(entry.getData().toString("utf8")) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const rca = y?.triage?.rca ?? {};
+    const triage: Triage = {
+      title: str(y?.title),
+      category: str(rca.category),
+      rootCause: str(rca.root_cause),
+      severity: str(y?.triage?.severity),
+      suggestedFix: str(y?.triage?.suggested_fix?.summary),
+      confidence: typeof rca.confidence === "number" ? rca.confidence : undefined,
+      errorMessage: str(y?.error?.message),
+    };
+    return Object.values(triage).some((v) => v !== undefined) ? triage : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function networkError(rec: unknown): string | undefined {
   if (typeof rec !== "object" || rec === null) return undefined;
   const o = rec as Record<string, unknown>;
@@ -86,10 +147,20 @@ export function readEvidence(packPath: string): Evidence {
     const isConsole = name.includes("console");
     const isNetwork = name.includes("network");
     if (!isConsole && !isNetwork) continue;
+    const isHar = name.endsWith(".har");
     let text: string;
     try {
       text = e.getData().toString("utf8");
     } catch {
+      continue;
+    }
+    if (isHar) {
+      for (const m of harErrors(text)) {
+        if (!seen.n.has(m) && out.networkErrors.length < MAX_ITEMS) {
+          seen.n.add(m);
+          out.networkErrors.push(m);
+        }
+      }
       continue;
     }
     for (const rec of records(text)) {
@@ -109,5 +180,6 @@ export function readEvidence(packPath: string): Evidence {
       }
     }
   }
+  out.triage = readTriage(zip);
   return out;
 }
