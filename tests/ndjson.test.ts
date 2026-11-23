@@ -74,3 +74,26 @@ describe("RunCollector on fixtures", () => {
     expect(resolveVerdict(1, c.end).verdict).toBe("fail");
   });
 });
+
+describe("real kane-cli 0.10.8 recording (passing run, trimmed)", () => {
+  it("is parsed into a pass: exit 0 and run_end passed agree", () => {
+    const c = new RunCollector();
+    for (const line of fixture("real-pass")) c.push(line);
+    expect(c.end).toMatchObject({
+      status: "passed",
+      oneLiner: "verified the Learn more link on example.com",
+      credits: 5.24296,
+      sessionDir: "/home/runner/.testmuai/kaneai/sessions/b41a26a0-ac37-48ee-ab54-54606a196b72",
+    });
+    expect(c.failingStep).toBeUndefined();
+    expect(c.stepCount).toBe(3);
+    expect(resolveVerdict(0, c.end).verdict).toBe("pass");
+  });
+
+  it("never turns that same recording into a pass if the exit code disagrees", () => {
+    const c = new RunCollector();
+    for (const line of fixture("real-pass")) c.push(line);
+    expect(resolveVerdict(1, c.end).verdict).toBe("unknown");
+    expect(resolveVerdict(2, c.end).verdict).toBe("unknown");
+  });
+});
