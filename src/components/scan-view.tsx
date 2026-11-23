@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronBack, ChevronRight } from "@/components/icons";
 import { Gauge } from "@/components/gauge";
 import { VerdictBadge } from "@/components/verdict-badge";
 import type { RunView, ScanSnapshot, StepView } from "@/lib/scans/queries";
+import { collapseSteps, stepText } from "@/lib/scans/steps";
 import { timeAgo } from "@/lib/time";
 
 const isOpen = (s: ScanSnapshot) => s.status === "queued" || s.status === "running";
@@ -43,7 +44,42 @@ function useScanStream(initial: { state: ScanSnapshot; steps: StepView[] }) {
 function glyph(status: string): { g: string; cls: string } {
   if (status === "done") return { g: "✓", cls: "ok" };
   if (status === "failed") return { g: "✗", cls: "bad" };
-  return { g: "›", cls: "" };
+  return { g: "›", cls: "now" };
+}
+
+interface LogLine {
+  key: string;
+  g: string;
+  cls: string;
+  text: string;
+  head?: boolean;
+}
+
+/** The terminal text, built only from what has really happened so far. */
+function buildLog(state: ScanSnapshot, steps: StepView[], current: RunView | undefined, host: string, slowStart: boolean): LogLine[] {
+  const lines: LogLine[] = [{ key: "sent", g: "✓", cls: "ok", text: "Scan sent to GitHub" }];
+  if (state.status === "queued") {
+    lines.push({ key: "boot", g: "›", cls: "now", text: "Starting a browser on GitHub" });
+    if (slowStart) lines.push({ key: "slow", g: " ", cls: "", text: "GitHub is taking a while to start the runner." });
+    return lines;
+  }
+  lines.push({ key: "ready", g: "✓", cls: "ok", text: "Browser ready" });
+  const all = collapseSteps(steps);
+  for (const r of state.runs) {
+    const mine = all.filter((x) => x.runId === r.id);
+    if (r.verdict === "pending" && mine.length === 0 && r.id !== current?.id) continue; // not started yet
+    lines.push({ key: `h-${r.id}`, g: "", cls: "", text: r.name, head: true });
+    if (r.id === current?.id && mine.length === 0) lines.push({ key: `o-${r.id}`, g: "›", cls: "now", text: `Opening ${host}` });
+    mine.forEach((x, i) => {
+      const { g, cls } = glyph(x.status);
+      const last = i === mine.length - 1 && r.verdict === "pending";
+      lines.push({ key: `s-${x.id}`, g, cls: x.status === "running" && !last ? "" : cls, text: stepText(x.remark, x.idx) });
+    });
+    if (r.verdict === "pass") lines.push({ key: `v-${r.id}`, g: "✓", cls: "ok", text: "Passed" });
+    if (r.verdict === "fail") lines.push({ key: `v-${r.id}`, g: "✗", cls: "bad", text: "Failed" });
+    if (r.verdict === "unknown") lines.push({ key: `v-${r.id}`, g: "?", cls: "", text: "Kane could not decide" });
+  }
+  return lines;
 }
 
 function FlowState({ run, current }: { run: RunView; current: boolean }) {
@@ -74,13 +110,25 @@ export function ScanView({
   const base = `/repos/${owner}/${name}`;
   const pending = state.runs.filter((r) => r.verdict === "pending");
   const current = state.status === "running" ? (pending.find((r) => steps.some((s) => s.runId === r.id)) ?? pending[0]) : undefined;
-  const lines = current ? steps.filter((s) => s.runId === current.id).slice(-4) : [];
-  const slowStart = state.status === "queued" && now - new Date(state.createdAt).getTime() > 60_000;
+  const slowStart = state.status === "queued" && now - new Date(state.createdAt).getTime() > 90_000;
   const host = state.targetUrl.replace(/^https?:\/\//, "");
+  const log = open ? buildLog(state, steps, current, host, slowStart) : [];
+  const latest = current ? collapseSteps(steps.filter((x) => x.runId === current.id)).at(-1) : undefined;
+  const finished = state.runs.filter((r) => r.verdict !== "pending").length;
+  const termRef = useRef<HTMLDivElement>(null);
+  const logSize = log.length;
+  useEffect(() => {
+    const el = termRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logSize]);
 
   const title = open ? "Scanning" : state.status === "done" ? "Scan result" : "Scan stopped";
   const sub = open ? (
-    host
+    state.status === "running" && state.runs.length > 1 ? (
+      `${host} · flow ${Math.min(finished + 1, state.runs.length)} of ${state.runs.length}`
+    ) : (
+      host
+    )
   ) : (
     <span suppressHydrationWarning>
       {state.commitSha ? `${state.commitSha.slice(0, 7)} · ` : ""}
@@ -125,7 +173,10 @@ export function ScanView({
           <li key={r.id}>
             {open ? (
               <div className="ui-row">
-                <p className="ui-rt ui-body">{r.name}</p>
+                <div className="ui-body">
+                  <p className="ui-rt">{r.name}</p>
+                  {current?.id === r.id && latest ? <p className="ui-rs">{stepText(latest.remark, latest.idx)}</p> : null}
+                </div>
                 <FlowState run={r} current={current?.id === r.id} />
               </div>
             ) : (
@@ -145,36 +196,18 @@ export function ScanView({
       {open ? (
         <div className="ui-term" role="log" aria-label="Kane output">
           <p className="ui-term-h">KANE</p>
-          <div className="ui-term-b">
-            {state.status === "queued" ? (
-              <>
-                <div className="ui-tl now">
-                  <span className="g">›</span>
-                  <span>Starting a browser…</span>
+          <div className="ui-term-b scroll" ref={termRef}>
+            {log.map((l) =>
+              l.head ? (
+                <p key={l.key} className="ui-tl-head">
+                  {l.text}
+                </p>
+              ) : (
+                <div key={l.key} className={`ui-tl ${l.cls}`}>
+                  <span className="g">{l.g}</span>
+                  <span>{l.text}</span>
                 </div>
-                {slowStart ? (
-                  <div className="ui-tl">
-                    <span className="g"> </span>
-                    <span>GitHub is taking a while to start the runner.</span>
-                  </div>
-                ) : null}
-              </>
-            ) : lines.length === 0 ? (
-              <div className="ui-tl now">
-                <span className="g">›</span>
-                <span>Opening {host}</span>
-              </div>
-            ) : (
-              lines.map((s, i) => {
-                const { g, cls } = glyph(s.status);
-                const last = i === lines.length - 1 && s.status !== "done" && s.status !== "failed";
-                return (
-                  <div key={s.id} className={`ui-tl ${cls} ${last ? "now" : ""}`}>
-                    <span className="g">{g}</span>
-                    <span>{s.remark || `Step ${s.idx}`}</span>
-                  </div>
-                );
-              })
+              ),
             )}
           </div>
         </div>

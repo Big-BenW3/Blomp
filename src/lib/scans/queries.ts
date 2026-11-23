@@ -105,6 +105,11 @@ export async function getSteps(scanId: string, afterId = 0, tail = 60): Promise<
   return latest.reverse();
 }
 
+/** Every step Kane reported for one run, oldest first. */
+export async function getRunSteps(runId: string): Promise<StepView[]> {
+  return getDb().select(stepCols).from(runSteps).where(eq(runSteps.runId, runId)).orderBy(asc(runSteps.id));
+}
+
 export interface RunDetail {
   id: string;
   scanId: string;

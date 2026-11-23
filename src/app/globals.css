@@ -14,7 +14,7 @@
   --fill: #e9e9ef;
   --accent: #4f46e5;
   --tint: rgba(79, 70, 229, 0.1);
-  --btn-bg: #4f46e5;
+  --btn-bg: var(--accent);
   --btn-ink: #ffffff;
   --pass: #1a7f37;
   --fail: #d70015;
@@ -26,8 +26,9 @@
   --logo-ink: #ffffff;
 }
 
+/* The theme follows the phone unless the user picked one (data-theme is set by the script in the layout). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --bg: #000000;
     --card: #0e0e11;
@@ -49,6 +50,44 @@
     --logo-b: #5558f2;
   }
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --card: #0e0e11;
+  --cardline: rgba(255, 255, 255, 0.07);
+  --text: #ededf0;
+  --muted: #8a8a93;
+  --sep: rgba(255, 255, 255, 0.07);
+  --fill: #17171b;
+  --accent: #8e91ff;
+  --tint: rgba(142, 145, 255, 0.13);
+  --btn-bg: #f2f2f5;
+  --btn-ink: #000000;
+  --pass: #3dd68c;
+  --fail: #ff6b63;
+  --warn: #ffb84d;
+  --glass: rgba(8, 8, 10, 0.78);
+  --hair: rgba(255, 255, 255, 0.09);
+  --logo-a: #9c9fff;
+  --logo-b: #5558f2;
+}
+
+/* Accent colours the user can pick in Profile. Brand indigo is the default and sets nothing here.
+   Light and dark each get their own shade so the colour stays readable on both canvases. */
+:root[data-accent="blue"] { --accent: #0a6cff; --tint: rgba(10, 108, 255, 0.1); }
+:root[data-accent="teal"] { --accent: #0f766e; --tint: rgba(15, 118, 110, 0.1); }
+:root[data-accent="pink"] { --accent: #c81e6a; --tint: rgba(200, 30, 106, 0.1); }
+:root[data-accent="orange"] { --accent: #c2410c; --tint: rgba(194, 65, 12, 0.1); }
+@media (prefers-color-scheme: dark) {
+  :root[data-accent="blue"]:not([data-theme="light"]) { --accent: #6cb2ff; --tint: rgba(108, 178, 255, 0.14); }
+  :root[data-accent="teal"]:not([data-theme="light"]) { --accent: #2dd4bf; --tint: rgba(45, 212, 191, 0.13); }
+  :root[data-accent="pink"]:not([data-theme="light"]) { --accent: #f472b6; --tint: rgba(244, 114, 182, 0.14); }
+  :root[data-accent="orange"]:not([data-theme="light"]) { --accent: #fb923c; --tint: rgba(251, 146, 60, 0.14); }
+}
+:root[data-theme="dark"][data-accent="blue"] { --accent: #6cb2ff; --tint: rgba(108, 178, 255, 0.14); }
+:root[data-theme="dark"][data-accent="teal"] { --accent: #2dd4bf; --tint: rgba(45, 212, 191, 0.13); }
+:root[data-theme="dark"][data-accent="pink"] { --accent: #f472b6; --tint: rgba(244, 114, 182, 0.14); }
+:root[data-theme="dark"][data-accent="orange"] { --accent: #fb923c; --tint: rgba(251, 146, 60, 0.14); }
 
 @theme inline {
   --color-background: var(--bg);
@@ -396,6 +435,15 @@ button.ui-row:active {
 .ui-tl.now {
   color: #fff;
 }
+.ui-tl-head {
+  margin-top: 6px;
+  color: #fff;
+  font-weight: 600;
+}
+.ui-term-b.scroll {
+  max-height: 280px;
+  overflow-y: auto;
+}
 .ui-badge {
   display: inline-flex;
   align-items: center;
@@ -434,4 +482,63 @@ button.ui-row:active {
   line-height: 1.5;
   color: var(--fail);
   word-break: break-word;
+}
+
+/* Profile: segmented control and colour dots. */
+.ui-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--fill);
+}
+.ui-seg button {
+  flex: 1;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ui-seg button[aria-pressed="true"] {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.ui-dot {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+.ui-dot[aria-pressed="true"] {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.ui-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.ui-stat {
+  padding: 14px 8px;
+  text-align: center;
+}
+.ui-stat + .ui-stat {
+  border-left: 1px solid var(--sep);
+}
+.ui-stat b {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.ui-stat span {
+  font-size: 12px;
+  color: var(--muted);
 }

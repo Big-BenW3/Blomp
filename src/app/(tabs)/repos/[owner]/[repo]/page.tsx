@@ -16,7 +16,7 @@ import { timeAgo } from "@/lib/time";
 import { saveFlowsAction, saveSiteUrl, runDiscovery, startScanAction } from "./actions";
 
 // Finding flows reads the repo and waits on the model, which can take most of a minute.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export default async function RepoPage({ params }: { params: Promise<{ owner: string; repo: string }> }) {
   const { owner, repo } = await params;

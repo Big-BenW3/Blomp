@@ -17,10 +17,13 @@ export class LlmError extends Error {
   }
 }
 
+/** Kimi is a reasoning model and can think for minutes; routes that call it raise maxDuration to match. */
+const DEFAULT_TIMEOUT_MS = 240_000;
+
 interface NvidiaOptions {
   fetchImpl?: typeof fetch;
   env?: Record<string, string | undefined>;
-  /** Stay under the serverless function limit so we can show an error instead of a platform timeout. */
+  /** Stay under the serverless function limit so we can show an error instead of a platform timeout. Default 240 s, or NVIDIA_TIMEOUT_MS. */
   timeoutMs?: number;
   maxTokens?: number;
 }
@@ -35,6 +38,8 @@ export function createNvidiaChat(opts: NvidiaOptions = {}): ChatFn {
     if (!key || !model) throw new LlmError("NVIDIA_API_KEY and NVIDIA_MODEL must be set", "config");
     const base = (env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1").replace(/\/+$/, "");
 
+    const timeoutMs = opts.timeoutMs ?? (Number(env.NVIDIA_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
+    const startedAt = Date.now();
     let res: Response;
     try {
       res = await doFetch(`${base}/chat/completions`, {
@@ -47,10 +52,11 @@ export function createNvidiaChat(opts: NvidiaOptions = {}): ChatFn {
           max_tokens: opts.maxTokens ?? 4096,
           stream: false,
         }),
-        signal: AbortSignal.timeout(opts.timeoutMs ?? 50_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (err) {
       if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+        console.error(`nvidia ${model} timed out after ${Date.now() - startedAt} ms`);
         throw new LlmError("The model took too long to answer", "timeout");
       }
       throw new LlmError(`Could not reach the model: ${(err as Error).message}`, "http");
@@ -66,6 +72,7 @@ export function createNvidiaChat(opts: NvidiaOptions = {}): ChatFn {
       | undefined;
     const content = body?.choices?.[0]?.message?.content;
     if (!content || !content.trim()) throw new LlmError("The model returned an empty answer", "empty");
+    console.info(`nvidia ${model} answered in ${Date.now() - startedAt} ms`);
     return content;
   };
 }

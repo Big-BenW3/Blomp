@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import { ChevronBack } from "@/components/icons";
+import { ChevronBack, ChevronRight } from "@/components/icons";
 import { VerdictBadge } from "@/components/verdict-badge";
 import { isAppIssue } from "@/lib/ingest/triage";
 import { requireUserId } from "@/lib/repos/load";
-import { getRunDetail } from "@/lib/scans/queries";
+import { getRunDetail, getRunSteps } from "@/lib/scans/queries";
+import { collapseSteps, stepText } from "@/lib/scans/steps";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ owner
   const run = await getRunDetail(userId, id.data);
   if (!run || run.scanId !== scanId || run.repoFullName !== `${owner}/${repo}`) notFound();
 
+  const steps = collapseSteps(await getRunSteps(run.id));
   const t = run.triage;
   const oneLiner = run.oneLiner ?? run.reason;
   const seen = [run.failingStep, ...run.networkErrors.slice(0, SHOWN), ...run.consoleErrors.slice(0, SHOWN)].filter(
@@ -52,6 +54,23 @@ export default async function EvidencePage({ params }: { params: Promise<{ owner
         </div>
       ) : null}
 
+      {steps.length > 0 ? (
+        <div className="ui-term" aria-label="What Kane did">
+          <p className="ui-term-h">WHAT KANE DID</p>
+          <div className="ui-term-b">
+            {steps.map((x) => {
+              const g = x.status === "done" ? ["✓", "ok"] : x.status === "failed" ? ["✗", "bad"] : ["›", ""];
+              return (
+                <div key={x.id} className={`ui-tl ${g[1]}`}>
+                  <span className="g">{g[0]}</span>
+                  <span>{stepText(x.remark, x.idx)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       {seen.length > 0 || cause ? (
         <ul className="ui-list split">
           {seen.length > 0 ? (
@@ -78,11 +97,18 @@ export default async function EvidencePage({ params }: { params: Promise<{ owner
       ) : null}
 
       {run.testUrl ? (
-        <a href={run.testUrl} target="_blank" rel="noopener noreferrer" className="ui-text-btn self-start">
-          View full Kane run
-        </a>
+        <ul className="ui-list">
+          <li>
+            <a href={run.testUrl} target="_blank" rel="noopener noreferrer" className="ui-row">
+              <div className="ui-body">
+                <p className="ui-rt">Watch the recording</p>
+                <p className="ui-rs">See exactly what Kane saw</p>
+              </div>
+              <ChevronRight size={16} className="shrink-0 text-muted" />
+            </a>
+          </li>
+        </ul>
       ) : null}
-      {run.credits !== null ? <p className="ui-note">Used {run.credits.toFixed(1)} Kane credits.</p> : null}
     </main>
   );
 }
