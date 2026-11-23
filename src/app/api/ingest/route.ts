@@ -7,7 +7,7 @@ import { verifySignedBody } from "@/lib/security/hmac";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BODY_BYTES = 256_000;
+const MAX_BODY_BYTES = 1_500_000; // a run_end may carry one base64 screenshot
 
 export async function POST(req: Request) {
   const secret = process.env.INGEST_SECRET;

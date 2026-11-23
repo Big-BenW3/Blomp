@@ -21,6 +21,30 @@ export interface Evidence {
   triage?: Triage;
   entryNames: string[];
   packPath?: string;
+  /** Screenshot of the failing step (or the last step when none is marked failed), for the evidence panel. */
+  screenshot?: Buffer;
+}
+
+const MAX_SCREENSHOT_BYTES = 700_000;
+
+const stepDir = (entryName: string) => entryName.match(/(^|\/)steps\/([^/]+)\//)?.[2] ?? "";
+const stepNo = (dir: string) => Number.parseInt(dir, 10) || 0;
+
+/** Prefers the screenshot of a step that has a failure.yaml; otherwise the last step's. */
+function pickScreenshot(zip: AdmZip): Buffer | undefined {
+  const entries = zip.getEntries().filter((e) => !e.isDirectory);
+  const shots = entries
+    .filter((e) => /(^|\/)steps\/[^/]+\/screenshot\.(jpe?g|png)$/i.test(e.entryName))
+    .sort((a, b) => stepNo(stepDir(a.entryName)) - stepNo(stepDir(b.entryName)));
+  if (shots.length === 0) return undefined;
+  const failed = new Set(entries.filter((e) => /(^|\/)steps\/[^/]+\/failure\.yaml$/.test(e.entryName)).map((e) => stepDir(e.entryName)));
+  const chosen = shots.find((e) => failed.has(stepDir(e.entryName))) ?? shots[shots.length - 1];
+  try {
+    const data = chosen.getData();
+    return data.length <= MAX_SCREENSHOT_BYTES ? data : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 const MAX_ITEMS = 50;
@@ -181,5 +205,6 @@ export function readEvidence(packPath: string): Evidence {
     }
   }
   out.triage = readTriage(zip);
+  out.screenshot = pickScreenshot(zip);
   return out;
 }

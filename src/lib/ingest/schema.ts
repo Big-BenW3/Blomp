@@ -34,6 +34,8 @@ export const ingestEvent = z.discriminatedUnion("kind", [
     triage: triageSchema.optional(),
     consoleErrors: z.array(z.string().max(1000)).max(50).default([]),
     networkErrors: z.array(z.string().max(1000)).max(50).default([]),
+    /** Base64 JPEG or PNG of the failing step; the app stores it in Blob. Sent for failed and unknown runs only. */
+    screenshot: z.string().max(1_000_000).optional(),
   }),
   z.object({ kind: z.literal("scan_end"), ...base }),
   z.object({ kind: z.literal("scan_error"), ...base, message: z.string().max(2000) }),

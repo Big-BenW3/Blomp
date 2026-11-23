@@ -3,18 +3,13 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ChevronRight, Search } from "@/components/icons";
+import { scoreZone } from "@/lib/kane/score";
 
 export interface RepoItem {
   owner: string;
   name: string;
   site: string | null;
   score: number | null;
-}
-
-function scoreColor(score: number): string {
-  if (score >= 80) return "var(--pass)";
-  if (score >= 50) return "var(--warn)";
-  return "var(--fail)";
 }
 
 export function RepoList({ items }: { items: RepoItem[] }) {
@@ -54,7 +49,7 @@ export function RepoList({ items }: { items: RepoItem[] }) {
                   <p className="ui-rs">{r.site ?? "No live site yet"}</p>
                 </div>
                 {r.score !== null ? (
-                  <span className="ui-score" style={{ color: scoreColor(r.score) }} aria-label={`Last score ${r.score}`}>
+                  <span className="ui-score" style={{ color: `var(--${scoreZone(r.score)})` }} aria-label={`Last score ${r.score}`}>
                     {r.score}
                   </span>
                 ) : null}

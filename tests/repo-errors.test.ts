@@ -16,6 +16,7 @@ describe("friendlyError", () => {
     expect(friendlyError({ status: 401 })).toMatch(/sign in again/);
     expect(friendlyError({ status: 403 })).toMatch(/limiting/);
     expect(friendlyError({ status: 404 })).toMatch(/cannot see/);
+    expect(friendlyError({ status: 409 })).toMatch(/repo is empty/);
   });
   it("falls back to a generic line and never leaks the raw error", () => {
     expect(friendlyError(new Error("connect ECONNREFUSED 10.0.0.1"))).toBe("Something went wrong. Try again.");

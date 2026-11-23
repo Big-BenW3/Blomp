@@ -1,15 +1,19 @@
 import Link from "next/link";
-import { ChevronBack } from "@/components/icons";
+import { ChevronBack, ChevronRight } from "@/components/icons";
 import { DiscoverButton } from "@/components/discover-button";
 import { FlowEditor } from "@/components/flow-editor";
 import { ReconnectCard } from "@/components/reconnect-card";
+import { ScanButton } from "@/components/scan-button";
 import { SiteUrlForm } from "@/components/site-url-form";
 import { findProductionUrl, type GhRepo } from "@/lib/github/repos";
 import { isAuthError } from "@/lib/github/octokit";
 import { loadOwnedRepo } from "@/lib/repos/load";
 import { MAX_ENABLED_FLOWS, MAX_TOTAL_FLOWS } from "@/lib/repos/schema";
 import { listFlows, setProdUrl, type RepoRow } from "@/lib/repos/store";
-import { saveFlowsAction, saveSiteUrl, runDiscovery } from "./actions";
+import { scoreZone } from "@/lib/kane/score";
+import { latestScanForRepo } from "@/lib/scans/queries";
+import { timeAgo } from "@/lib/time";
+import { saveFlowsAction, saveSiteUrl, runDiscovery, startScanAction } from "./actions";
 
 // Finding flows reads the repo and waits on the model, which can take most of a minute.
 export const maxDuration = 60;
@@ -37,8 +41,11 @@ export default async function RepoPage({ params }: { params: Promise<{ owner: st
   }
 
   const flows = await listFlows(row.id);
+  const last = await latestScanForRepo(row.id);
   const items = flows.map((f) => ({ id: f.id, name: f.name, objective: f.objective, path: f.path, enabled: f.enabled }));
   const site = (row.prodUrl ?? "").replace(/^https:\/\//, "");
+  const enabled = items.filter((f) => f.enabled).length;
+  const scanHint = !row.prodUrl ? "Add your live site address to scan." : enabled === 0 ? "Turn on at least one flow to scan." : undefined;
 
   return (
     <main className="flex flex-col gap-3.5">
@@ -51,6 +58,27 @@ export default async function RepoPage({ params }: { params: Promise<{ owner: st
       <h1 className="ui-h">{gh.name}</h1>
 
       <SiteUrlForm key={site} initial={site} action={saveSiteUrl.bind(null, gh.owner, gh.name)} />
+
+      {last ? (
+        <ul className="ui-list">
+          <li>
+            <Link href={`/repos/${gh.owner}/${gh.name}/scans/${last.id}`} className="ui-row">
+              <div className="ui-body">
+                <p className="ui-rt">Last scan</p>
+                <p className="ui-rs">
+                  {last.status === "queued" || last.status === "running" ? "Running now" : last.status === "error" ? "Stopped" : timeAgo(last.createdAt)}
+                </p>
+              </div>
+              {last.score !== null ? (
+                <span className="ui-score" style={{ color: `var(--${scoreZone(last.score)})` }}>
+                  {last.score}
+                </span>
+              ) : null}
+              <ChevronRight size={16} className="shrink-0 text-muted" />
+            </Link>
+          </li>
+        </ul>
+      ) : null}
 
       {items.length > 0 ? (
         <FlowEditor
@@ -69,6 +97,7 @@ export default async function RepoPage({ params }: { params: Promise<{ owner: st
         </div>
       )}
 
+      {items.length > 0 ? <ScanButton action={startScanAction.bind(null, gh.owner, gh.name)} hint={scanHint} /> : null}
       <DiscoverButton action={runDiscovery.bind(null, gh.owner, gh.name)} hasFlows={items.length > 0} />
     </main>
   );

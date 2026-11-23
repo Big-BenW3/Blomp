@@ -352,3 +352,86 @@ button.ui-row:active {
 .ui-list.split > li + li {
   border-top: 1px solid var(--sep);
 }
+
+/* Kane log: a dark panel in both modes, like a terminal. */
+.ui-term {
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--hair);
+  background: #0a0a0c;
+  color: #dadadf;
+}
+.ui-term-h {
+  padding: 10px 14px 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: #7d7d86;
+}
+.ui-term-b {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 14px 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.ui-tl {
+  display: flex;
+  gap: 8px;
+}
+.ui-tl > .g {
+  flex: none;
+  width: 10px;
+  color: #7d7d86;
+}
+.ui-tl.ok > .g {
+  color: #3dd68c;
+}
+.ui-tl.bad > .g {
+  color: #ff6b63;
+}
+.ui-tl.now {
+  color: #fff;
+}
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  color: var(--muted);
+  background: var(--fill);
+}
+.ui-badge.pass {
+  color: var(--pass);
+  background: color-mix(in srgb, var(--pass) 13%, transparent);
+}
+.ui-badge.fail {
+  color: var(--fail);
+  background: color-mix(in srgb, var(--fail) 13%, transparent);
+}
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+}
+.ui-code {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fail);
+  word-break: break-word;
+}

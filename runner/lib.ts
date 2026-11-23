@@ -123,6 +123,8 @@ export async function runFlow(
     triage: evidence?.triage,
     consoleErrors: evidence?.consoleErrors ?? [],
     networkErrors: evidence?.networkErrors ?? [],
+    // Only failed or unfinished runs get a screenshot; a pass has nothing to show.
+    screenshot: exitCode !== 0 ? evidence?.screenshot?.toString("base64") : undefined,
   });
   log?.(`${flow.name}: exit ${exitCode} (${collector.end?.status ?? "no run_end"})`);
 }

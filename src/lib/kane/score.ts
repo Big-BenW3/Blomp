@@ -27,3 +27,12 @@ export function summarize(verdicts: RunVerdict[]): ScanSummary {
     complete: verdicts.length > 0 && unknown === 0,
   };
 }
+
+export type ScoreZone = "pass" | "warn" | "fail";
+
+/** Colour band for a score: 80 and up is healthy, 50 to 79 needs attention, below 50 is broken. */
+export function scoreZone(score: number): ScoreZone {
+  if (score >= 80) return "pass";
+  if (score >= 50) return "warn";
+  return "fail";
+}

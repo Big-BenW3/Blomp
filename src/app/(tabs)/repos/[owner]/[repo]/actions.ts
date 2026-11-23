@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createNvidiaChat } from "@/lib/agent/llm";
 import { discoverFlows } from "@/lib/agent/discover";
 import { listRepoFiles, readRepoFile } from "@/lib/github/repos";
@@ -9,6 +10,8 @@ import { friendlyError } from "@/lib/repos/errors";
 import { loadOwnedRepo, requireUserId } from "@/lib/repos/load";
 import { flowsFormSchema, repoParamSchema } from "@/lib/repos/schema";
 import { applyDiscovery, FlowLimitError, findRepoRow, saveFlows, setProdUrl } from "@/lib/repos/store";
+import { createWorkflowDispatcher } from "@/lib/scans/dispatch";
+import { ScanStartError, startScan } from "@/lib/scans/start";
 import { normalizeSiteUrl } from "@/lib/url";
 
 const back = (owner: string, name: string) => revalidatePath(`/repos/${owner}/${name}`);
@@ -68,8 +71,32 @@ export async function runDiscovery(owner: string, name: string): Promise<ActionS
     });
     await applyDiscovery(row.id, proposals);
   } catch (err) {
+    console.error("flow discovery failed", gh.fullName, err);
     return { ok: false, message: friendlyError(err) };
   }
   back(owner, name);
   return { ok: true };
+}
+
+/** Starts a scan and opens its live screen. Reuses a scan that is already running instead of starting a second. */
+export async function startScanAction(owner: string, name: string): Promise<ActionState> {
+  const { userId, octokit, gh, row } = await loadOwnedRepo(owner, name);
+
+  let commitSha: string | null = null;
+  try {
+    const { data } = await octokit.rest.repos.getBranch({ owner: gh.owner, repo: gh.name, branch: gh.defaultBranch });
+    commitSha = data.commit.sha;
+  } catch {
+    // the commit is only a label on the scan; never block a scan over it
+  }
+
+  let scanId: string;
+  try {
+    ({ scanId } = await startScan({ userId, repo: row, commitSha, dispatch: createWorkflowDispatcher() }));
+  } catch (err) {
+    if (err instanceof ScanStartError) return { ok: false, message: err.message };
+    console.error("could not start scan", err);
+    return { ok: false, message: "Could not start the scan. Try again in a moment." };
+  }
+  redirect(`/repos/${gh.owner}/${gh.name}/scans/${scanId}`);
 }

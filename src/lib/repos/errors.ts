@@ -13,5 +13,7 @@ export function friendlyError(err: unknown): string {
   if (status === 401) return "GitHub says your sign-in expired. Sign out from Profile and sign in again.";
   if (status === 403 || status === 429) return "GitHub is limiting requests right now. Try again in a minute.";
   if (status === 404) return "GitHub cannot see this repo with your sign-in.";
+  // GitHub answers 409 "Git Repository is empty" when a repo has no commits yet.
+  if (status === 409) return "This repo is empty. Push your site's code to it first, then try again.";
   return "Something went wrong. Try again.";
 }

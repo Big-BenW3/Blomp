@@ -1,11 +1,17 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { events, flows, repos, runSteps, runs, scans } from "@/db/schema";
+import { decodeImage, uploadEvidenceImage, type UploadImage } from "@/lib/evidence/image";
 import { resolveVerdict } from "@/lib/kane/ndjson";
 import { summarize, type RunVerdict } from "@/lib/kane/score";
 import type { IngestEvent } from "./schema";
 
 export class NotFoundError extends Error {}
+
+export interface IngestDeps {
+  /** Where failure screenshots go. Defaults to Vercel Blob; tests pass a fake. */
+  uploadImage?: UploadImage;
+}
 
 async function ensureRun(scanId: string, flowId: string): Promise<string> {
   const db = getDb();
@@ -26,7 +32,7 @@ async function ensureRun(scanId: string, flowId: string): Promise<string> {
 }
 
 /** Applies one signed, validated runner event. Every branch is idempotent: the runner may retry. */
-export async function applyIngest(event: IngestEvent): Promise<void> {
+export async function applyIngest(event: IngestEvent, deps: IngestDeps = {}): Promise<void> {
   const db = getDb();
 
   switch (event.kind) {
@@ -57,6 +63,18 @@ export async function applyIngest(event: IngestEvent): Promise<void> {
     case "run_end": {
       const runId = await ensureRun(event.scanId, event.flowId);
       const { verdict, reason } = resolveVerdict(event.exitCode, event.end);
+
+      // A screenshot is a nice-to-have: if it cannot be stored, the verdict is still recorded.
+      let evidenceUrl: string | undefined;
+      const image = event.screenshot && verdict !== "pass" ? decodeImage(event.screenshot) : undefined;
+      if (image) {
+        try {
+          evidenceUrl = await (deps.uploadImage ?? uploadEvidenceImage)(`evidence/${event.scanId}/${event.flowId}.jpg`, image);
+        } catch (err) {
+          console.error("screenshot upload failed", err);
+        }
+      }
+
       await db
         .update(runs)
         .set({
@@ -68,6 +86,7 @@ export async function applyIngest(event: IngestEvent): Promise<void> {
           triage: event.triage ?? null,
           credits: event.end?.credits ?? null,
           testUrl: event.end?.testUrl ?? null,
+          ...(evidenceUrl ? { evidenceUrl } : {}),
           consoleErrors: event.consoleErrors,
           networkErrors: event.networkErrors,
           finishedAt: new Date(),
