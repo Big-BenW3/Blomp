@@ -52,13 +52,15 @@ export function FlowEditor({
   return (
     <form action={formAction} className="flex flex-col gap-3.5">
       <input type="hidden" name="flows" value={JSON.stringify(strip(items))} />
-      <p className="ui-eyebrow">
-        <span>Flows Kane will check</span>
-        <span>
-          {enabledCount} of {maxEnabled} on
-        </span>
-      </p>
-      <ul className="ui-list split">
+      {items.length > 0 ? (
+        <p className="ui-eyebrow">
+          <span>Flows Kane will check</span>
+          <span>
+            {enabledCount} of {maxEnabled} on
+          </span>
+        </p>
+      ) : null}
+      <ul className="ui-list split" hidden={items.length === 0}>
         {items.map((f) => {
           const isOpen = open === f.key;
           const blocked = !f.enabled && enabledCount >= maxEnabled;
@@ -130,7 +132,7 @@ export function FlowEditor({
       {items.length < maxTotal ? (
         <button type="button" className="ui-text-btn self-start" onClick={add}>
           <Plus size={16} />
-          Add a flow
+          {items.length === 0 ? "Write a flow yourself" : "Add a flow"}
         </button>
       ) : null}
       {state && !state.ok && state.message ? (

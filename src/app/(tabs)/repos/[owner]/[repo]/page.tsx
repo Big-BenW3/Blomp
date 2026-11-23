@@ -80,22 +80,22 @@ export default async function RepoPage({ params }: { params: Promise<{ owner: st
         </ul>
       ) : null}
 
-      {items.length > 0 ? (
-        <FlowEditor
-          key={JSON.stringify(items)}
-          initial={items}
-          action={saveFlowsAction.bind(null, gh.owner, gh.name)}
-          maxEnabled={MAX_ENABLED_FLOWS}
-          maxTotal={MAX_TOTAL_FLOWS}
-        />
-      ) : (
+      {items.length === 0 ? (
         <div className="ui-list px-6 py-8 text-center">
           <p className="text-base font-semibold">No flows yet</p>
           <p className="mx-auto mt-1.5 max-w-xs text-sm text-muted">
-            Blomp reads your code and suggests 3 to 5 things worth checking on your live site.
+            Blomp reads your code and suggests 3 to 5 things worth checking on your live site. Or write one yourself.
           </p>
         </div>
-      )}
+      ) : null}
+
+      <FlowEditor
+        key={JSON.stringify(items)}
+        initial={items}
+        action={saveFlowsAction.bind(null, gh.owner, gh.name)}
+        maxEnabled={MAX_ENABLED_FLOWS}
+        maxTotal={MAX_TOTAL_FLOWS}
+      />
 
       {items.length > 0 ? <ScanButton action={startScanAction.bind(null, gh.owner, gh.name)} hint={scanHint} /> : null}
       <DiscoverButton action={runDiscovery.bind(null, gh.owner, gh.name)} hasFlows={items.length > 0} />
