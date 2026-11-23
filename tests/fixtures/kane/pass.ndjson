@@ -1,0 +1,7 @@
+{"v":1,"ts":"2026-11-23T10:00:00Z","type":"stream_start","surface":"run","cli_version":"0.0.0-synthetic"}
+{"v":1,"ts":"2026-11-23T10:00:01Z","step":1,"status":"running","remark":"Opening the page"}
+{"v":1,"ts":"2026-11-23T10:00:02Z","step":1,"status":"done","remark":"Page loaded"}
+{"v":1,"ts":"2026-11-23T10:00:03Z","step":2,"status":"done","remark":"Heading is visible"}
+not json at all
+{"v":1,"ts":"2026-11-23T10:00:04Z","type":"future_event_type","anything":true}
+{"v":1,"ts":"2026-11-23T10:00:05Z","type":"run_end","status":"passed","summary":"All checks passed","one_liner":"Page loads and shows the heading","reason":"ok","duration":5,"credits_consumed":2.5,"test_url":"https://example.com/run/1","session_dir":"/nonexistent/session","result_code":0}

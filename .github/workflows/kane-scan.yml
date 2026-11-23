@@ -1,0 +1,61 @@
+name: kane-scan
+
+# Started by the Blomp app (workflow_dispatch). Runs Kane in real Chrome and streams each step and verdict
+# back to the app. Kane needs a real browser, which Vercel functions do not have; ubuntu-latest does.
+on:
+  workflow_dispatch:
+    inputs:
+      scan_id:
+        description: Scan id (uuid)
+        required: true
+      target_url:
+        description: URL of the site to check
+        required: true
+      flows:
+        description: JSON array of {id, name, objective, path}
+        required: true
+      ingest_url:
+        description: Blomp ingest endpoint (leave empty for a dry run that only prints events)
+        required: false
+        default: ""
+
+concurrency:
+  group: kane-scan-${{ inputs.scan_id }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Kane CLI
+        run: npm install -g @testmuai/kane-cli
+      - name: Log in to Kane
+        run: kane-cli login --username "$KANE_USERNAME" --access-key "$KANE_ACCESS_KEY"
+        env:
+          KANE_USERNAME: ${{ secrets.KANE_USERNAME }}
+          KANE_ACCESS_KEY: ${{ secrets.KANE_ACCESS_KEY }}
+      - name: Run the scan
+        run: npx tsx runner/run-scan.ts
+        env:
+          SCAN_ID: ${{ inputs.scan_id }}
+          TARGET_URL: ${{ inputs.target_url }}
+          FLOWS_JSON: ${{ inputs.flows }}
+          INGEST_URL: ${{ inputs.ingest_url }}
+          INGEST_SECRET: ${{ secrets.INGEST_SECRET }}
+      - name: Keep Kane's evidence packs for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kane-evidence-${{ inputs.scan_id }}
+          path: |
+            ~/.testmuai/kaneai/sessions/**/evidence/*.evidence
+            .testmuai/evidence/**
+          if-no-files-found: ignore
+          retention-days: 7

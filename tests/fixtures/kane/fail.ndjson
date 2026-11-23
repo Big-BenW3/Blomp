@@ -1,0 +1,4 @@
+{"v":1,"ts":"2026-11-23T10:00:00Z","type":"stream_start","surface":"run","cli_version":"0.0.0-synthetic"}
+{"v":1,"ts":"2026-11-23T10:00:01Z","step":1,"status":"done","remark":"Form filled"}
+{"v":1,"ts":"2026-11-23T10:00:02Z","step":2,"status":"failed","remark":"Welcome page did not appear after submit"}
+{"v":1,"ts":"2026-11-23T10:00:03Z","type":"run_end","status":"failed","summary":"Signup did not complete","one_liner":"Submit led to an error page","reason":"Expected welcome page, saw 500","duration":3,"credits_consumed":3,"test_url":"https://example.com/run/2","session_dir":"/nonexistent/session","result_code":1}
