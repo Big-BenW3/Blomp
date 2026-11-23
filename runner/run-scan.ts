@@ -64,6 +64,7 @@ async function main() {
     flows,
     post,
     workflowRunId: process.env.GITHUB_RUN_ID ? Number(process.env.GITHUB_RUN_ID) : undefined,
+    rawDir: process.env.BLOMP_RAW_DIR,
     log: (m) => console.log(`[blomp] ${m}`),
   });
 }

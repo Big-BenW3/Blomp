@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { RunCollector } from "../src/lib/kane/ndjson";
 import type { IngestEventInput } from "../src/lib/ingest/schema";
@@ -20,6 +22,8 @@ export interface RunScanOptions {
   maxSteps?: number;
   timeoutSec?: number;
   workflowRunId?: number;
+  /** When set, Kane's raw stdout and exit codes are saved here so a run can be inspected afterwards. */
+  rawDir?: string;
   log?: (msg: string) => void;
 }
 
@@ -33,7 +37,7 @@ export function flowUrl(targetUrl: string, path: string): string {
 export async function runFlow(
   flow: FlowInput,
   opts: Required<Pick<RunScanOptions, "scanId" | "targetUrl" | "post" | "kaneBin" | "maxSteps" | "timeoutSec">> &
-    Pick<RunScanOptions, "log">,
+    Pick<RunScanOptions, "log" | "rawDir">,
 ): Promise<void> {
   const { scanId, post, log } = opts;
   await post({ kind: "run_start", scanId, flowId: flow.id });
@@ -71,9 +75,16 @@ export async function runFlow(
     child.on("close", (code) => resolve(killed ? 3 : (code ?? 3)));
   });
 
+  const rawFile = opts.rawDir ? join(opts.rawDir, "kane-stdout.ndjson") : undefined;
+  const raw = (record: Record<string, unknown>) => {
+    if (rawFile) appendFileSync(rawFile, `${JSON.stringify({ flowId: flow.id, ...record })}\n`);
+  };
+  if (opts.rawDir) mkdirSync(opts.rawDir, { recursive: true });
+
   const collector = new RunCollector();
   const rl = createInterface({ input: child.stdout });
   for await (const line of rl) {
+    raw({ stdout: line });
     const parsed = collector.push(line);
     if (parsed.kind === "step") {
       await post({
@@ -99,6 +110,7 @@ export async function runFlow(
     }
   }
   if (evidence) log?.(`evidence entries: ${evidence.entryNames.join(", ")}`);
+  raw({ exitCode, stderrTail });
   if (exitCode === 2 && stderrTail.length) log?.(`kane stderr: ${stderrTail.join(" | ")}`);
 
   await post({
@@ -128,6 +140,7 @@ export async function runScan(opts: RunScanOptions): Promise<void> {
         log,
         kaneBin: opts.kaneBin ?? "kane-cli",
         maxSteps: opts.maxSteps ?? 25,
+        rawDir: opts.rawDir,
         timeoutSec: opts.timeoutSec ?? 180,
       });
     }

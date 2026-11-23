@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import AdmZip from "adm-zip";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { flowUrl, runScan, type FlowInput } from "../runner/lib";
@@ -38,6 +38,25 @@ describe("runner", () => {
     const events = await run("pass", 0);
     expect(events.map((e) => e.kind)).toEqual(["scan_start", "run_start", "step", "step", "step", "run_end", "scan_end"]);
     expect(events.find((e) => e.kind === "run_end")).toMatchObject({ exitCode: 0, end: { status: "passed" } });
+  });
+
+  it("saves Kane's raw stdout and exit code when a raw directory is given", async () => {
+    const rawDir = join(mkdtempSync(join(tmpdir(), "raw-")), "blomp-raw");
+    process.env.FAKE_KANE_EXIT = "0";
+    process.env.FAKE_KANE_FIXTURE = fx("pass");
+    await runScan({
+      scanId: SCAN,
+      targetUrl: "https://shop.example.com",
+      flows: [FLOW],
+      kaneBin: FAKE,
+      timeoutSec: 20,
+      rawDir,
+      post: async () => {},
+    });
+    const lines = readFileSync(join(rawDir, "kane-stdout.ndjson"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    expect(lines.every((l) => l.flowId === FLOW.id)).toBe(true);
+    expect(lines.some((l) => typeof l.stdout === "string" && l.stdout.includes("run_end"))).toBe(true);
+    expect(lines.at(-1)).toMatchObject({ exitCode: 0 });
   });
 
   it("reports the failing step and exit code for a failing flow", async () => {
