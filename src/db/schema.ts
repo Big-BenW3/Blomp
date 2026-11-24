@@ -142,6 +142,11 @@ export const fixes = pgTable(
     summary: text("summary"),
     status: text("status").notNull().default("drafting"), // drafting | pr_open | verifying | verified | failed
     recheckScanId: uuid("recheck_scan_id"),
+    /** What went wrong, in words the user can read. Set when status is failed. */
+    error: text("error"),
+    /** The Vercel preview address Kane re-checks, and the commit it was built from. */
+    previewUrl: text("preview_url"),
+    headSha: text("head_sha"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("fixes_run_idx").on(t.runId)],

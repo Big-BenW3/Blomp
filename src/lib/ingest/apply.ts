@@ -4,6 +4,7 @@ import { events, flows, repos, runSteps, runs, scans } from "@/db/schema";
 import { decodeImage, uploadEvidenceImage, type UploadImage } from "@/lib/evidence/image";
 import { resolveVerdict } from "@/lib/kane/ndjson";
 import { summarize, type RunVerdict } from "@/lib/kane/score";
+import { finalizeRecheck } from "@/lib/fixes/recheck";
 import type { IngestEvent } from "./schema";
 
 export class NotFoundError extends Error {}
@@ -11,6 +12,17 @@ export class NotFoundError extends Error {}
 export interface IngestDeps {
   /** Where failure screenshots go. Defaults to Vercel Blob; tests pass a fake. */
   uploadImage?: UploadImage;
+  /** Runs after a scan ends or fails; defaults to closing out a fix's re-check. Tests pass a fake. */
+  onScanFinished?: (scanId: string) => Promise<void>;
+}
+
+async function scanFinished(scanId: string, deps: IngestDeps): Promise<void> {
+  try {
+    await (deps.onScanFinished ?? finalizeRecheck)(scanId);
+  } catch (err) {
+    // The scan result is already saved; a failed follow-up must not make the runner retry it.
+    console.error("follow-up after scan failed", scanId, err);
+  }
 }
 
 async function ensureRun(scanId: string, flowId: string): Promise<string> {
@@ -116,12 +128,13 @@ export async function applyIngest(event: IngestEvent, deps: IngestDeps = {}): Pr
           finishedAt: new Date(),
         })
         .where(eq(scans.id, event.scanId))
-        .returning({ repoId: scans.repoId });
+        .returning({ repoId: scans.repoId, trigger: scans.trigger });
       if (!scan) throw new NotFoundError("scan not found");
 
       const [repo] = await db.select({ userId: repos.userId }).from(repos).where(eq(repos.id, scan.repoId));
       if (repo) {
-        if (s.score !== null) await db.update(repos).set({ lastScore: s.score }).where(eq(repos.id, scan.repoId));
+        // A re-check covers one flow on a preview, so it must not replace the repo's score for the live site.
+        if (s.score !== null && scan.trigger !== "recheck") await db.update(repos).set({ lastScore: s.score }).where(eq(repos.id, scan.repoId));
         await db.insert(events).values({
           userId: repo.userId,
           repoId: scan.repoId,
@@ -129,6 +142,7 @@ export async function applyIngest(event: IngestEvent, deps: IngestDeps = {}): Pr
           payload: { scanId: event.scanId, ...s },
         });
       }
+      await scanFinished(event.scanId, deps);
       return;
     }
 
@@ -139,6 +153,7 @@ export async function applyIngest(event: IngestEvent, deps: IngestDeps = {}): Pr
         .where(eq(scans.id, event.scanId))
         .returning({ id: scans.id });
       if (updated.length === 0) throw new NotFoundError("scan not found");
+      await scanFinished(event.scanId, deps);
       return;
     }
   }

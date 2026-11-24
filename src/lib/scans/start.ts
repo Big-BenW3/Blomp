@@ -24,6 +24,12 @@ export interface StartScanOptions {
   dispatch: Dispatcher;
   trigger?: "manual" | "push" | "recheck";
   commitSha?: string | null;
+  /** Test this address instead of the repo's live site (a fix's preview deployment). */
+  targetUrl?: string;
+  /** Run only these flows, on or off. Used to re-check the flow a fix is for. */
+  flowIds?: string[];
+  /** Start even if another scan is in flight: a re-check must not be swallowed by an unrelated scan. */
+  allowConcurrent?: boolean;
   now?: Date;
 }
 
@@ -37,24 +43,29 @@ export async function startScan(opts: StartScanOptions): Promise<{ scanId: strin
   const db = getDb();
   const now = opts.now ?? new Date();
 
-  const targetUrl = normalizeSiteUrl(repo.prodUrl);
+  const targetUrl = normalizeSiteUrl(opts.targetUrl ?? repo.prodUrl);
   if (!targetUrl) throw new ScanStartError("Add your live site address first, so Kane knows what to open.");
 
-  const flows = (await listFlows(repo.id)).filter((f) => f.enabled).slice(0, MAX_ENABLED_FLOWS);
+  const all = await listFlows(repo.id);
+  const flows = opts.flowIds
+    ? all.filter((f) => opts.flowIds?.includes(f.id)).slice(0, MAX_ENABLED_FLOWS)
+    : all.filter((f) => f.enabled).slice(0, MAX_ENABLED_FLOWS);
   if (flows.length === 0) throw new ScanStartError("Turn on at least one flow for Kane to check.");
 
-  const [active] = await db
-    .select({ id: scans.id })
-    .from(scans)
-    .where(
-      and(
-        eq(scans.repoId, repo.id),
-        inArray(scans.status, ["queued", "running"]),
-        gt(scans.createdAt, new Date(now.getTime() - STALE_MS)),
-      ),
-    )
-    .orderBy(desc(scans.createdAt))
-    .limit(1);
+  const [active] = opts.allowConcurrent
+    ? []
+    : await db
+        .select({ id: scans.id })
+        .from(scans)
+        .where(
+          and(
+            eq(scans.repoId, repo.id),
+            inArray(scans.status, ["queued", "running"]),
+            gt(scans.createdAt, new Date(now.getTime() - STALE_MS)),
+          ),
+        )
+        .orderBy(desc(scans.createdAt))
+        .limit(1);
   if (active) return { scanId: active.id, reused: true };
 
   const [scan] = await db

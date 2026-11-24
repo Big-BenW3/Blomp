@@ -2,13 +2,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ChevronBack, ChevronRight } from "@/components/icons";
+import { FixPanel } from "@/components/fix-panel";
 import { VerdictBadge } from "@/components/verdict-badge";
+import { getFixForRun } from "@/lib/fixes/store";
 import { isAppIssue } from "@/lib/ingest/triage";
 import { requireUserId } from "@/lib/repos/load";
 import { getRunDetail, getRunSteps } from "@/lib/scans/queries";
 import { collapseSteps, stepText } from "@/lib/scans/steps";
+import { recheckNowAction, startFixAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+/** Writing a fix with the model can take minutes, and the work continues after the tap returns. */
+export const maxDuration = 300;
 
 const SHOWN = 3;
 
@@ -21,6 +26,7 @@ export default async function EvidencePage({ params }: { params: Promise<{ owner
   if (!run || run.scanId !== scanId || run.repoFullName !== `${owner}/${repo}`) notFound();
 
   const steps = collapseSteps(await getRunSteps(run.id));
+  const fix = run.verdict === "fail" ? ((await getFixForRun(userId, run.id)) ?? null) : null;
   const t = run.triage;
   const oneLiner = run.oneLiner ?? run.reason;
   const seen = [run.failingStep, ...run.networkErrors.slice(0, SHOWN), ...run.consoleErrors.slice(0, SHOWN)].filter(
@@ -28,6 +34,8 @@ export default async function EvidencePage({ params }: { params: Promise<{ owner
   );
   const cause = t?.rootCause ?? t?.title;
   const showChip = run.verdict === "fail" && t?.category;
+  const canFix = run.verdict === "fail" && (!t?.category || isAppIssue(t));
+  const noFixReason = run.verdict === "fail" && !canFix ? "Kane thinks this flow needs a rewrite rather than a code fix. Edit the flow and scan again." : undefined;
 
   return (
     <main className="flex flex-col gap-3.5">
@@ -94,6 +102,17 @@ export default async function EvidencePage({ params }: { params: Promise<{ owner
             </li>
           ) : null}
         </ul>
+      ) : null}
+
+      {run.verdict === "fail" ? (
+        <FixPanel
+          initial={fix}
+          repoPath={`/repos/${owner}/${repo}`}
+          canFix={canFix}
+          reason={noFixReason}
+          start={startFixAction.bind(null, run.id)}
+          recheck={recheckNowAction}
+        />
       ) : null}
 
       {run.testUrl ? (
