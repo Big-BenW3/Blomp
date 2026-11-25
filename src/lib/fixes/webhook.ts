@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { startPushScans } from "@/lib/autoscan/push";
 import { normalizeSiteUrl } from "@/lib/url";
 import { startRecheckForFix, type RecheckDeps } from "./recheck";
 import { findOpenFix } from "./store";
@@ -13,11 +14,12 @@ const deploymentStatusEvent = z.object({
   repository: z.object({ full_name: z.string() }),
 });
 
-export type WebhookOutcome = "pong" | "ignored" | "no_matching_fix" | "recheck_started" | "recheck_not_started";
+export type WebhookOutcome = "pong" | "ignored" | "no_matching_fix" | "recheck_started" | "recheck_not_started" | "scan_started";
 
 /**
- * Reacts to GitHub events. The one that matters: a deployment of a fix branch became ready, so Kane re-checks the
- * preview. Everything else (other events, failed or production deployments, branches Blomp did not open) is ignored.
+ * Reacts to GitHub events. Two matter: a deployment of a fix branch became ready, so Kane re-checks the preview;
+ * and a production deployment became ready, so Kane scans the live site for repos with auto-scan on.
+ * Everything else (other events, failed deployments, branches Blomp did not open) is ignored.
  */
 export async function handleGithubEvent(eventName: string | null, payload: unknown, deps: RecheckDeps = {}): Promise<WebhookOutcome> {
   if (eventName === "ping") return "pong";
@@ -27,7 +29,10 @@ export async function handleGithubEvent(eventName: string | null, payload: unkno
   if (!parsed.success) return "ignored";
   const { deployment_status: status, deployment, repository } = parsed.data;
   if (status.state !== "success") return "ignored";
-  if (/^production/i.test(deployment.environment ?? "")) return "ignored";
+  if (/^production/i.test(deployment.environment ?? "")) {
+    const { started } = await startPushScans(repository.full_name, deployment.sha, { dispatch: deps.dispatch });
+    return started > 0 ? "scan_started" : "ignored";
+  }
 
   const previewUrl = normalizeSiteUrl(status.environment_url || status.target_url);
   if (!previewUrl) return "ignored";

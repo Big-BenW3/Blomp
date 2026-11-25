@@ -80,3 +80,38 @@ export const UserIcon = (p: P) => (
     <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
   </Svg>
 );
+export const CheckMark = (p: P) => (
+  <Svg {...p}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </Svg>
+);
+export const XMark = (p: P) => (
+  <Svg {...p}>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </Svg>
+);
+export const ShieldCheck = (p: P) => (
+  <Svg {...p} sw={1.9}>
+    <path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3Z" />
+    <path d="m9 12 2 2 4-4" />
+  </Svg>
+);
+export const PullRequest = (p: P) => (
+  <Svg {...p} sw={1.9}>
+    <circle cx="6" cy="6" r="2.2" />
+    <circle cx="6" cy="18" r="2.2" />
+    <circle cx="18" cy="18" r="2.2" />
+    <path d="M6 8.2v7.6M18 15.8V10a3 3 0 0 0-3-3h-3" />
+  </Svg>
+);
+export const Bolt = (p: P) => (
+  <Svg {...p} sw={1.9}>
+    <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
+  </Svg>
+);
+export const AlertMark = (p: P) => (
+  <Svg {...p} sw={1.9}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8v5M12 16.5h.01" />
+  </Svg>
+);

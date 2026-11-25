@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoScanToggle } from "@/components/auto-scan-toggle";
 import { ChevronBack, ChevronRight } from "@/components/icons";
 import { DiscoverButton } from "@/components/discover-button";
 import { FlowEditor } from "@/components/flow-editor";
@@ -13,7 +14,7 @@ import { listFlows, setProdUrl, type RepoRow } from "@/lib/repos/store";
 import { scoreZone } from "@/lib/kane/score";
 import { latestScanForRepo } from "@/lib/scans/queries";
 import { timeAgo } from "@/lib/time";
-import { saveFlowsAction, saveSiteUrl, runDiscovery, startScanAction } from "./actions";
+import { saveFlowsAction, saveSiteUrl, runDiscovery, setAutoScanAction, startScanAction } from "./actions";
 
 // Finding flows reads the repo and waits on the model, which can take most of a minute.
 export const maxDuration = 300;
@@ -58,6 +59,8 @@ export default async function RepoPage({ params }: { params: Promise<{ owner: st
       <h1 className="ui-h">{gh.name}</h1>
 
       <SiteUrlForm key={site} initial={site} action={saveSiteUrl.bind(null, gh.owner, gh.name)} />
+
+      <AutoScanToggle key={String(row.autoScan)} initial={row.autoScan} action={setAutoScanAction.bind(null, gh.owner, gh.name)} />
 
       {last ? (
         <ul className="ui-list">

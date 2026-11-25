@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import { fixes, repos, runs, scans } from "@/db/schema";
 
@@ -17,22 +17,39 @@ export interface FixView {
   recheckScanId: string | null;
 }
 
-export const toView = (f: FixRow): FixView => ({
-  id: f.id,
-  runId: f.runId,
-  status: f.status as FixStatus,
-  summary: f.summary,
-  prUrl: f.prUrl,
-  prNumber: f.prNumber,
-  error: f.error,
-  recheckScanId: f.recheckScanId,
-});
+/**
+ * The fix runs after the tap, inside a function that the platform stops after 5 minutes. If it was stopped,
+ * nothing ever marks the fix finished, so a "drafting" fix this old is treated as failed and can be retried.
+ */
+export const FIX_STALE_MS = 6 * 60 * 1000;
+export const STALE_FIX_ERROR = "Writing the fix took too long and was stopped. Try again.";
+
+const isStaleDrafting = (f: FixRow, now: Date) => f.status === "drafting" && now.getTime() - f.createdAt.getTime() > FIX_STALE_MS;
+
+export const toView = (f: FixRow, now: Date = new Date()): FixView => {
+  const stale = isStaleDrafting(f, now);
+  return {
+    id: f.id,
+    runId: f.runId,
+    status: stale ? "failed" : (f.status as FixStatus),
+    summary: f.summary,
+    prUrl: f.prUrl,
+    prNumber: f.prNumber,
+    error: stale ? STALE_FIX_ERROR : f.error,
+    recheckScanId: f.recheckScanId,
+  };
+};
 
 /** A fix that is still going, or already done, is reused so a double tap never opens two pull requests. */
 const KEEP: FixStatus[] = ["drafting", "pr_open", "verifying", "verified"];
 
-export async function createFix(runId: string): Promise<{ fix: FixRow; created: boolean }> {
+export async function createFix(runId: string, now: Date = new Date()): Promise<{ fix: FixRow; created: boolean }> {
   const db = getDb();
+  // Clear out a fix that was stopped midway, so it does not block a new attempt.
+  await db
+    .update(fixes)
+    .set({ status: "failed", error: STALE_FIX_ERROR })
+    .where(and(eq(fixes.runId, runId), eq(fixes.status, "drafting"), lt(fixes.createdAt, new Date(now.getTime() - FIX_STALE_MS))));
   const [existing] = await db
     .select()
     .from(fixes)

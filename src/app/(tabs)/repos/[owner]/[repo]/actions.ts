@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createNvidiaChat } from "@/lib/agent/llm";
+import { AutoScanError, setAutoScan } from "@/lib/autoscan/enable";
 import { discoverFlows } from "@/lib/agent/discover";
 import { listRepoFiles, readRepoFile } from "@/lib/github/repos";
 import type { ActionState } from "@/lib/repos/action-state";
@@ -99,4 +100,18 @@ export async function startScanAction(owner: string, name: string): Promise<Acti
     return { ok: false, message: "Could not start the scan. Try again in a moment." };
   }
   redirect(`/repos/${gh.owner}/${gh.name}/scans/${scanId}`);
+}
+
+/** Turns scan-on-push on or off. Turning it on adds GitHub's deployment webhook to the repo. */
+export async function setAutoScanAction(owner: string, name: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { userId, octokit, row } = await loadOwnedRepo(owner, name);
+  try {
+    await setAutoScan({ userId, row, enabled: formData.get("enabled") === "true", octokit });
+  } catch (err) {
+    if (err instanceof AutoScanError) return { ok: false, message: err.message };
+    console.error("could not change auto-scan", row.fullName, err);
+    return { ok: false, message: friendlyError(err) };
+  }
+  back(owner, name);
+  return { ok: true };
 }

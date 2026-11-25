@@ -14,7 +14,8 @@ describe("friendlyError", () => {
   });
   it("maps GitHub statuses", () => {
     expect(friendlyError({ status: 401 })).toMatch(/sign in again/);
-    expect(friendlyError({ status: 403 })).toMatch(/limiting/);
+    expect(friendlyError({ status: 429 })).toMatch(/limiting/);
+    expect(friendlyError({ status: 500 })).toMatch(/trouble/);
     expect(friendlyError({ status: 404 })).toMatch(/cannot see/);
     expect(friendlyError({ status: 409 })).toMatch(/repo is empty/);
   });

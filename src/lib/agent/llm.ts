@@ -26,7 +26,12 @@ interface NvidiaOptions {
   /** Stay under the serverless function limit so we can show an error instead of a platform timeout. Default 240 s, or NVIDIA_TIMEOUT_MS. */
   timeoutMs?: number;
   maxTokens?: number;
+  /** Wait before the one automatic retry after a rate limit or a brief outage. Default 4 s. */
+  retryDelayMs?: number;
 }
+
+const RETRY_STATUSES = new Set([429, 502, 503, 504]);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Chat completions against NVIDIA NIM (OpenAI-compatible). Reads NVIDIA_API_KEY, NVIDIA_MODEL, NVIDIA_BASE_URL. */
 export function createNvidiaChat(opts: NvidiaOptions = {}): ChatFn {
@@ -40,9 +45,8 @@ export function createNvidiaChat(opts: NvidiaOptions = {}): ChatFn {
 
     const timeoutMs = opts.timeoutMs ?? (Number(env.NVIDIA_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
     const startedAt = Date.now();
-    let res: Response;
-    try {
-      res = await doFetch(`${base}/chat/completions`, {
+    const send = () =>
+      doFetch(`${base}/chat/completions`, {
         method: "POST",
         headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
         body: JSON.stringify({
@@ -54,6 +58,15 @@ export function createNvidiaChat(opts: NvidiaOptions = {}): ChatFn {
         }),
         signal: AbortSignal.timeout(timeoutMs),
       });
+    let res: Response;
+    try {
+      res = await send();
+      // A rate limit or a brief outage on the free API usually clears in seconds: try once more before giving up.
+      if (RETRY_STATUSES.has(res.status)) {
+        console.warn(`nvidia ${model} answered ${res.status}, retrying once`);
+        await sleep(opts.retryDelayMs ?? 4000);
+        res = await send();
+      }
     } catch (err) {
       if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
         console.error(`nvidia ${model} timed out after ${Date.now() - startedAt} ms`);

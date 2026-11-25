@@ -178,7 +178,7 @@ describe("createNvidiaChat", () => {
 
   it("reports missing config, rate limits, server errors, empty answers and timeouts", async () => {
     await expect(createNvidiaChat({ env: {} })([])).rejects.toMatchObject({ kind: "config" });
-    const status = (s: number) => createNvidiaChat({ env, fetchImpl: (async () => new Response("nope", { status: s })) as typeof fetch })([]);
+    const status = (s: number) => createNvidiaChat({ env, retryDelayMs: 0, fetchImpl: (async () => new Response("nope", { status: s })) as typeof fetch })([]);
     await expect(status(429)).rejects.toMatchObject({ kind: "rate_limit" });
     await expect(status(500)).rejects.toMatchObject({ kind: "http" });
     await expect(createNvidiaChat({ env, fetchImpl: (async () => ok("  ")) as typeof fetch })([])).rejects.toMatchObject({ kind: "empty" });
