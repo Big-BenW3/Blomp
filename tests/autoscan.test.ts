@@ -125,6 +125,48 @@ describe("scan on push", () => {
   });
 });
 
+const commitStatus = (fullName: string, over: { state?: string; context?: string; sha?: string; branches?: string[]; defaultBranch?: string | null } = {}) => ({
+  state: over.state ?? "success",
+  context: over.context ?? "Vercel",
+  sha: over.sha ?? "e".repeat(40),
+  branches: (over.branches ?? ["master"]).map((name) => ({ name })),
+  repository: { full_name: fullName, default_branch: over.defaultBranch === undefined ? "master" : over.defaultBranch },
+});
+
+describe("scan on a Vercel commit status", () => {
+  it("scans when Vercel reports a finished deploy of the default branch", async () => {
+    const repo = await shop();
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+    expect(await handleGithubEvent("status", commitStatus(repo.fullName, { sha: "f".repeat(40) }), { dispatch })).toBe("scan_started");
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    const [scan] = await getDb().select().from(scans).where(eq(scans.repoId, repo.id));
+    expect(scan).toMatchObject({ trigger: "push", commitSha: "f".repeat(40) });
+  });
+
+  it("scans each commit once, even if the status is sent twice", async () => {
+    const repo = await shop();
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+    const event = commitStatus(repo.fullName, { sha: "9".repeat(40) });
+    expect(await handleGithubEvent("status", event, { dispatch })).toBe("scan_started");
+    expect(await handleGithubEvent("status", event, { dispatch })).toBe("ignored");
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores previews, other tools, unfinished deploys and repos without auto-scan", async () => {
+    const repo = await shop();
+    const off = await shop({ autoScan: false });
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+    expect(await handleGithubEvent("status", commitStatus(repo.fullName, { branches: ["blomp/fix-123"] }), { dispatch })).toBe("ignored");
+    expect(await handleGithubEvent("status", commitStatus(repo.fullName, { context: "ci/build" }), { dispatch })).toBe("ignored");
+    expect(await handleGithubEvent("status", commitStatus(repo.fullName, { state: "pending" }), { dispatch })).toBe("ignored");
+    expect(await handleGithubEvent("status", commitStatus(repo.fullName, { state: "failure" }), { dispatch })).toBe("ignored");
+    expect(await handleGithubEvent("status", commitStatus(repo.fullName, { defaultBranch: null }), { dispatch })).toBe("ignored");
+    expect(await handleGithubEvent("status", commitStatus(off.fullName), { dispatch })).toBe("ignored");
+    expect(await handleGithubEvent("status", { nonsense: true }, { dispatch })).toBe("ignored");
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+});
+
 function fakeOctokit(over: { createWebhook?: () => Promise<unknown>; listWebhooks?: () => Promise<unknown> } = {}) {
   const repos = {
     listWebhooks: vi.fn(over.listWebhooks ?? (async () => ({ data: [] }))),
@@ -140,7 +182,7 @@ describe("turning auto-scan on and off", () => {
     const row = await shop({ autoScan: false });
     const { octokit, repos: api } = fakeOctokit();
     await setAutoScan({ userId: me, row, enabled: true, octokit, ...hook });
-    expect(api.createWebhook).toHaveBeenCalledWith(expect.objectContaining({ events: ["deployment_status"], config: expect.objectContaining({ url: hook.url, secret: hook.secret }) }));
+    expect(api.createWebhook).toHaveBeenCalledWith(expect.objectContaining({ events: ["deployment_status", "status"], config: expect.objectContaining({ url: hook.url, secret: hook.secret }) }));
     const [after] = await getDb().select().from(repos).where(eq(repos.id, row.id));
     expect(after).toMatchObject({ autoScan: true, webhookId: 4242 });
   });
@@ -152,6 +194,16 @@ describe("turning auto-scan on and off", () => {
     expect(api.createWebhook).not.toHaveBeenCalled();
     const [after] = await getDb().select().from(repos).where(eq(repos.id, row.id));
     expect(after).toMatchObject({ autoScan: true, webhookId: 7 });
+  });
+
+  it("adds the status event to a webhook that only had deployment_status", async () => {
+    const row = await shop({ autoScan: false });
+    const { octokit, repos: api } = fakeOctokit({ listWebhooks: async () => ({ data: [{ id: 716, events: ["deployment_status"], config: { url: hook.url } }] }) });
+    await setAutoScan({ userId: me, row, enabled: true, octokit, ...hook });
+    expect(api.createWebhook).not.toHaveBeenCalled();
+    expect(api.updateWebhook).toHaveBeenCalledWith(expect.objectContaining({ hook_id: 716, events: ["deployment_status", "status"] }));
+    const [after] = await getDb().select().from(repos).where(eq(repos.id, row.id));
+    expect(after).toMatchObject({ autoScan: true, webhookId: 716 });
   });
 
   it("switches off without touching GitHub", async () => {

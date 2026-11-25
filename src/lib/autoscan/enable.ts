@@ -41,7 +41,8 @@ export async function setAutoScan(opts: AutoScanOptions): Promise<void> {
   const [owner, name] = row.fullName.split("/");
   let webhookId: number;
   try {
-    webhookId = await ensureDeploymentWebhook(octokit, { owner, name, url, secret });
+    // Vercel reports some projects' deploys as GitHub deployments and others only as commit statuses, so listen for both.
+    webhookId = await ensureDeploymentWebhook(octokit, { owner, name, url, secret, events: ["deployment_status", "status"] });
   } catch (err) {
     const status = (err as { status?: number }).status;
     if (status === 401) throw new AutoScanError("GitHub no longer accepts your sign-in. Sign out, sign back in and try again.");

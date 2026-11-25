@@ -66,18 +66,19 @@ export async function openFixPullRequest(octokit: Octokit, input: PullRequestInp
 /** Makes sure the repo reports deployments to Blomp. Returns the webhook id; reuses one that already points here. */
 export async function ensureDeploymentWebhook(
   octokit: Octokit,
-  opts: { owner: string; name: string; url: string; secret: string },
+  opts: { owner: string; name: string; url: string; secret: string; events?: string[] },
 ): Promise<number> {
   const { owner, name: repo } = opts;
+  const wanted = opts.events ?? ["deployment_status"];
   const { data: hooks } = await octokit.rest.repos.listWebhooks({ owner, repo, per_page: 100 });
   const existing = hooks.find((h) => h.config?.url === opts.url);
   if (existing) {
-    if (!existing.events.includes("deployment_status")) {
+    if (wanted.some((e) => !existing.events.includes(e))) {
       await octokit.rest.repos.updateWebhook({
         owner,
         repo,
         hook_id: existing.id,
-        events: [...new Set([...existing.events, "deployment_status"])],
+        events: [...new Set([...existing.events, ...wanted])],
         config: { url: opts.url, content_type: "json", secret: opts.secret },
       });
     }
@@ -86,7 +87,7 @@ export async function ensureDeploymentWebhook(
   const { data } = await octokit.rest.repos.createWebhook({
     owner,
     repo,
-    events: ["deployment_status"],
+    events: wanted,
     active: true,
     config: { url: opts.url, content_type: "json", secret: opts.secret },
   });
